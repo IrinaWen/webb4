@@ -5,14 +5,6 @@ header('Content-Type: text/html; charset=UTF-8');
 session_set_cookie_params(3600);
 session_start();
 
-// Очистка сообщений об ошибках после их отображения
-if (!empty($_SESSION['formErrors'])) {
-    unset($_SESSION['formErrors']);
-}
-if (!empty($_SESSION['fieldErrors'])) {
-    unset($_SESSION['fieldErrors']);
-}
-
 // Функция для получения значения поля.  Сначала проверяет сессию, потом куки.
 function getFieldValue($fieldName) {
     // Сначала проверяем сессию
@@ -56,53 +48,40 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $formErrors = [];
     $fieldErrors = [];
     
-// Валидация ФИО (теперь точно не пропустит цифры)
-if (empty($_POST['fio'])) {
-    $fieldErrors['fio'] = 'Поле ФИО обязательно для заполнения.';
-    $errors = true;
-} else {
-    // Удаляем все разрешенные символы и проверяем, осталось ли что-то
-    $cleaned = preg_replace('/[а-яА-ЯёЁa-zA-Z\s-]/u', '', $_POST['fio']);
-    if (!empty($cleaned)) {
+    // Валидация ФИО
+    if (empty($_POST['fio'])) {
+        $fieldErrors['fio'] = 'Поле ФИО обязательно для заполнения.';
+        $errors = true;
+    } elseif (!preg_match('/^[а-яА-ЯёЁa-zA-Z\s-]+$/u', $_POST['fio'])) {
         $fieldErrors['fio'] = 'ФИО может содержать только буквы, пробелы и дефисы.';
         $errors = true;
     } elseif (strlen($_POST['fio']) > 150) {
         $fieldErrors['fio'] = 'ФИО не должно превышать 150 символов.';
         $errors = true;
     }
-}
-
-// Валидация телефона (теперь точно не пропустит буквы)
-if (empty($_POST['tel'])) {
-    $fieldErrors['tel'] = 'Поле телефона обязательно для заполнения.';
-    $errors = true;
-} else {
-    // Удаляем все разрешенные символы
-    $cleaned = preg_replace('/[\d\s\-\+\(\)]/', '', $_POST['tel']);
-    if (!empty($cleaned)) {
-        $fieldErrors['tel'] = 'Телефон должен содержать только цифры, пробелы, +, - или скобки.';
+    
+    // Валидация телефона
+    if (empty($_POST['tel'])) {
+        $fieldErrors['tel'] = 'Поле телефона обязательно для заполнения.';
         $errors = true;
-    } else {
-        // Проверяем количество цифр (от 6 до 20)
-        $digitCount = preg_match_all('/\d/', $_POST['tel']);
-        if ($digitCount < 6 || $digitCount > 20) {
-            $fieldErrors['tel'] = 'Телефон должен содержать от 6 до 20 цифр.';
-            $errors = true;
-        }
+    } elseif (!preg_match('/^[\d\s\-\+\(\)]+$/', $_POST['tel'])) {
+        $fieldErrors['tel'] = 'Телефон должен содержать цифры, пробелы, +, - или скобки.';
+        $errors = true;
+    } elseif (strlen($_POST['tel']) < 6 || strlen($_POST['tel']) > 20) {
+        $fieldErrors['tel'] = 'Телефон должен содержать от 6 до 20 символов.';
+        $errors = true;
     }
-}
-
     
     // Валидация email
     if (empty($_POST['email'])) {
         $fieldErrors['email'] = 'Поле email обязательно для заполнения.';
         $errors = true;
-    } elseif (!filter_var($_POST['email'], FILTER_VALIDATE_EMAIL)) {
+    } else if (!filter_var($_POST['email'], FILTER_VALIDATE_EMAIL)) {
         $fieldErrors['email'] = 'Пожалуйста, введите корректный email.';
         $errors = true;
     }
     
-// Валидация даты рождения (полная проверка)
+    // Валидация даты рождения 
 if (empty($_POST['date'])) {
     $fieldErrors['date'] = 'Поле даты рождения обязательно для заполнения.';
     $errors = true;
@@ -137,9 +116,10 @@ if (empty($_POST['date'])) {
         }
     }
 }
+   
     
     // Валидация пола
-    if (empty($_POST['gender']) || !in_array($_POST['gender'], ['male', 'female'])) {
+    if (empty($_POST['gender']) || !in_array($_POST['gender'], ['Мужской', 'Женский'])) {
         $fieldErrors['gender'] = 'Пожалуйста, выберите пол.';
         $errors = true;
     }
@@ -149,9 +129,8 @@ if (empty($_POST['date'])) {
         $fieldErrors['plang'] = 'Пожалуйста, выберите хотя бы один язык программирования.';
         $errors = true;
     } else {
-        $allowedLanguages = ['Pascal', 'C', 'C++', 'JavaScript', 'PHP', 'Haskell', 'Clojure', 'Prolog', 'Scala'];
         foreach ($_POST['plang'] as $lang) {
-            if (!in_array($lang, $allowedLanguages)) {
+            if (!($lang > 0 && $lang <= 12)) {
                 $fieldErrors['plang'] = 'Выбран недопустимый язык программирования.';
                 $errors = true;
                 break;
@@ -170,13 +149,13 @@ if (empty($_POST['date'])) {
     
     // Валидация чекбокса
     if (empty($_POST['check'])) {
-        $fieldErrors['check'] = 'Необходимо подтвердить ознакомление с контрактом.';
+        $fieldErrors['check'] = 'Необходимо подтвердить согласие с контрактом.';
         $errors = true;
     }
     
-    // Если есть ошибки, сохраняем их в сессию и возвращаем на форму
-    if ($errors) {
-        $_SESSION['formErrors'] = ['Пожалуйста, исправьте указанные ошибки.'];
+      // Если есть ошибки, сохраняем их в сессию и возвращаем на форму
+      if ($errors) {
+        $_SESSION['formErrors'] = $fieldErrors;
         $_SESSION['fieldErrors'] = $fieldErrors;
         $_SESSION['oldValues'] = $_POST;
         
@@ -184,45 +163,22 @@ if (empty($_POST['date'])) {
         exit();
     }
     
-    // Если ошибок нет, сохраняем данные в БД и куки
-    $user = 'uXXXXX';
-    $pass = 'YYYYYYY';
-    $dbname = 'uXXXXX';
+    $user = 'u69120'; // Заменить на ваш логин uXXXXX
+    $pass = '7228987'; // Заменить на пароль
+    $db = new PDO('mysql:host=localhost;dbname=u69120', $user, $pass,
+      [PDO::ATTR_PERSISTENT => true, PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]); // Заменить test на имя БД, совпадает с логином uXXXXX
     
+    // Подготовленный запрос. Не именованные метки.
     try {
-        $db = new PDO("mysql:host=localhost;dbname=$dbname", $user, $pass, [
-            PDO::ATTR_PERSISTENT => true,
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION
-        ]);
-        
-        // Вставка основных данных
-        $stmt = $db->prepare("INSERT INTO applications (fio, tel, email, birth_date, gender, bio) VALUES (?, ?, ?, ?, ?, ?)");
-        $stmt->execute([
-            $_POST['fio'],
-            $_POST['tel'],
-            $_POST['email'],
-            $_POST['date'],
-            $_POST['gender'],
-            $_POST['bio']
-        ]);
-        
-        $applicationId = $db->lastInsertId();
-        
-        // Вставка языков программирования
-        $stmt = $db->prepare("INSERT INTO application_languages (application_id, language_id) VALUES (?, ?)");
-        foreach ($_POST['plang'] as $language) {
-            $langStmt = $db->prepare("SELECT id FROM programming_languages WHERE name = ?");
-            $langStmt->execute([$language]);
-            $langId = $langStmt->fetchColumn();
-            
-            if (!$langId) {
-                $langStmt = $db->prepare("INSERT INTO programming_languages (name) VALUES (?)");
-                $langStmt->execute([$language]);
-                $langId = $db->lastInsertId();
-            }
-            
-            $stmt->execute([$applicationId, $langId]);
-        }
+      $stmt = $db->prepare("INSERT INTO apply ( fio, phone, email, birthdate, gender, biography, contract_accepted ) VALUES (?, ?, ?, ?, ?, ?, ?)");
+      $stmt->execute([$_POST['fio'], $_POST['tel'], $_POST['email'], $_POST['date'], $_POST['gender'], $_POST['bio'], $_POST['check'] ]);
+  
+      $new_id = $db->lastInsertId();
+  
+      foreach ($_POST['plang'] as $language) {
+        $stmt = $db->prepare("INSERT INTO apply_pl ( apply_id, progr_lang_id ) VALUES (?, ?)");
+      $stmt->execute([$new_id, $language]);
+      }
         
         // Сохраняем данные в куки на 1 год
         $formData = [
@@ -257,6 +213,17 @@ $genderValue = getFieldValue('gender');
 $bioValue = getFieldValue('bio');
 $plangValues = getCheckboxValues('plang');
 
+$fieldErrors = (!empty($_SESSION['fieldErrors']))?$_SESSION['fieldErrors']:[];
+$formErrors = (!empty($_SESSION['formErrors']))?$_SESSION['formErrors']:[];
+
+// Очистка сообщений об ошибках после их отображения
+if (!empty($_SESSION['formErrors'])) {
+    unset($_SESSION['formErrors']);
+}
+if (!empty($_SESSION['fieldErrors'])) {
+    unset($_SESSION['fieldErrors']);
+}
+
 ?>
 <!DOCTYPE html>
 <html lang="ru">
@@ -265,108 +232,116 @@ $plangValues = getCheckboxValues('plang');
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Форма регистрации</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background: #f7f7f7;
-            overflow: auto;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-        }
+    body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background: #f0f8ff; 
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+    }
 
-        .form-container {
-            background: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            width: 90%;
-            max-width: 500px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-            overflow: auto;
-            max-height: 90vh;
-        }
+    .form-container {
+        background: #ffffff;
+        padding: 30px; 
+        border-radius: 10px; 
+        width: 95%; 
+        max-width: 600px; 
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.1); 
+        overflow: hidden; 
+    }
 
-        .form-container h2 {
-            margin: 0 0 15px;
-        }
+    .form-container h2 {
+        color: #333333; 
+        margin-bottom: 25px; 
+        text-align: center; 
+    }
 
-        .form-row {
-            margin-bottom: 20px;
-        }
+    .form-row {
+        margin-bottom: 25px; 
+    }
 
-        .form-container input,
-        .form-container textarea,
-        .form-container select {
-            width: 60%;
-            padding: 10px;
-            margin-top: 5px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
+    .form-container input,
+    .form-container textarea,
+    .form-container select {
+        width: 100%;
+        padding: 12px; 
+        margin-top: 8px; 
+        border: 1px solid #cccccc; 
+        border-radius: 6px; 
+        box-sizing: border-box; 
+    }
 
-        .form-container button {
-            width: 100%;
-            padding: 10px;
-            background: rgb(81, 207, 13);
-            color: #fff;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            margin-top: 20px;
-        }
+    .form-container button {
+        width: 100%;
+        padding: 14px; 
+        background: #007bff; 
+        color: #ffffff; 
+        border: none;
+        border-radius: 6px; 
+        cursor: pointer;
+        margin-top: 25px; 
+        transition: background-color 0.3s ease; 
+    }
 
-        .form-container button:hover {
-            background:rgb(81, 207, 13);
-        }
+    .form-container button:hover {
+        background: #0056b3; 
+    }
 
-        .gender-container {
-            display: flex;
-            margin-top: 5px;
-        }
+    .gender-container {
+        display: flex;
+        margin-top: 8px; 
+    }
 
-        .form-check {
-            margin-right: 20px;
-            display: flex;
-            align-items: center;
-        }
+    .form-check {
+        margin-right: 20px;
+        display: flex;
+        align-items: center;
+    }
 
-        .form-group {
-            display: flex;
-            align-items: center;
-            margin-top: 10px;
-        }
+    .form-group {
+        display: flex;
+        align-items: center;
+        margin-top: 15px; 
+    }
 
-        .form-group label {
-            margin-left: 5px;
-            margin-bottom: 0;
-        }
+    .form-group label {
+        margin-left: 8px; 
+        margin-bottom: 0;
+        color: #555555; 
+    }
 
-        .form-check-input {
-            margin-right: 10px;
-        }
+    .form-check-input {
+        margin-right: 10px;
+    }
 
-        .error {
-            color: red;
-            font-size: 0.8em;
-            margin-top: 5px;
-        }
-        
-        .error-field {
-            border-color: red !important;
-        }
-        
-        .form-messages {
-            margin-bottom: 20px;
-            padding: 10px;
-            border: 1px solid #f5c6cb;
-            background-color: #f8d7da;
-            color: #721c24;
-            border-radius: 4px;
-        }
+    .error {
+        color: #dc3545; 
+        font-size: 0.9em;
+        margin-top: 8px; 
+    }
 
-    </style>
+    .error-field {
+        border-color: #dc3545 !important; 
+    }
+
+    .form-messages {
+        margin-bottom: 25px; 
+        padding: 15px;
+        border: 1px solid #f8d7da;
+        background-color: #fef2f2; 
+        color: #721c24;
+        border-radius: 6px; 
+    }
+
+    .form-container label {
+        color: #555555; 
+        display: block; 
+        margin-bottom: 5px;
+    }
+</style>
 </head>
 <body>
     <div class="form-container">
@@ -374,7 +349,7 @@ $plangValues = getCheckboxValues('plang');
         
         <?php if (!empty($formErrors)): ?>
         <div class="form-messages">
-            <p>Пожалуйста, исправьте следующие ошибки:</p>
+            <p>Пожалуйста, исправьте ошибки в форме:</p>
             <ul>
                 <?php foreach ($formErrors as $error): ?>
                 <li><?php echo htmlspecialchars($error); ?></li>
@@ -391,7 +366,7 @@ $plangValues = getCheckboxValues('plang');
             <div class="form-row">
                 <label for="fio">ФИО:</label>
                 <input type="text" name="fio" class="form-control <?php echo !empty($fieldErrors['fio']) ? 'error-field' : ''; ?>" 
-                       id="fio" placeholder="Бухтоярова Ирина Алексеевна" required
+                       id="fio" placeholder="Иванов Иван Иванович" required
                        value="<?php echo getFieldValue('fio'); ?>">
                 <?php if (!empty($fieldErrors['fio'])): ?>
                 <div class="error"><?php echo htmlspecialchars($fieldErrors['fio']); ?></div>
@@ -401,7 +376,7 @@ $plangValues = getCheckboxValues('plang');
             <div class="form-row">
                 <label for="tel">Номер телефона:</label>
                 <input type="tel" name="tel" class="form-control <?php echo !empty($fieldErrors['tel']) ? 'error-field' : ''; ?>" 
-                       id="tel" placeholder="8-9-88-234-09-78" required
+                       id="tel" placeholder="Введите ваш номер" required
                        value="<?php echo getFieldValue('tel'); ?>">
                 <?php if (!empty($fieldErrors['tel'])): ?>
                 <div class="error"><?php echo htmlspecialchars($fieldErrors['tel']); ?></div>
@@ -411,7 +386,7 @@ $plangValues = getCheckboxValues('plang');
             <div class="form-row">
                 <label for="email">Email:</label>
                 <input type="email" name="email" class="form-control <?php echo !empty($fieldErrors['email']) ? 'error-field' : ''; ?>" 
-                       id="email" placeholder="bukhto@yandex.ru" required
+                       id="email" placeholder="Введите вашу почту" required
                        value="<?php echo getFieldValue('email'); ?>">
                 <?php if (!empty($fieldErrors['email'])): ?>
                 <div class="error"><?php echo htmlspecialchars($fieldErrors['email']); ?></div>
@@ -432,13 +407,13 @@ $plangValues = getCheckboxValues('plang');
                 <label>Пол:</label>
                 <div class="gender-container">
                     <div class="form-check">
-                        <input class="form-check-input" type="radio" name="gender" id="radio-male" value="male" required
-                            <?php echo (getFieldValue('gender') == 'male') ? 'checked' : ''; ?>>
+                        <input class="form-check-input" type="radio" name="gender" id="radio-male" value="Мужской" required
+                            <?php echo (getFieldValue('gender') == 'Мужской') ? 'checked' : ''; ?>>
                         <label class="form-check-label" for="radio-male">Мужской</label>
                     </div>
                     <div class="form-check">
-                        <input class="form-check-input" type="radio" name="gender" id="radio-female" value="female" required
-                            <?php echo (getFieldValue('gender') == 'female') ? 'checked' : ''; ?>>
+                        <input class="form-check-input" type="radio" name="gender" id="radio-female" value="Женский" required
+                            <?php echo (getFieldValue('gender') == 'Женский') ? 'checked' : ''; ?>>
                         <label class="form-check-label" for="radio-female">Женский</label>
                     </div>
                 </div>
@@ -452,11 +427,11 @@ $plangValues = getCheckboxValues('plang');
                 <select class="form-control <?php echo !empty($fieldErrors['plang']) ? 'error-field' : ''; ?>" 
                         name="plang[]" id="plang" multiple required>
                     <?php
-                    $languages = ['Pascal', 'C', 'C++', 'JavaScript', 'PHP', 'Haskell', 'Clojure', 'Prolog', 'Scala'];
+                    $languages = ['Pascal', 'C', 'C++', 'JavaScript', 'PHP', 'Python','Java','Haskell', 'Clojure', 'Prolog', 'Scala','Go'];
                     $plangValues = getCheckboxValues('plang');
-                    foreach ($languages as $lang) {
-                        $selected = (in_array($lang, $plangValues)) ? 'selected' : '';
-                        echo "<option value=\"$lang\" $selected>$lang</option>";
+                    foreach ($languages as $key=>$lang) {
+                        $selected = (in_array($key+1, $plangValues)) ? 'selected' : '';
+                        echo "<option value=\"".($key+1)."\" $selected>$lang</option>";
                     }
                     ?>
                 </select>
@@ -466,18 +441,18 @@ $plangValues = getCheckboxValues('plang');
             </div>
             
             <div class="form-row">
-                <label for="bio">Биография:</label><br/>
+                <label for="bio">Биография:</label>
                 <textarea class="form-control <?php echo !empty($fieldErrors['bio']) ? 'error-field' : ''; ?>" 
-                          name="bio" id="bio" rows="3" placeholder="..." required><?php 
+                          name="bio" id="bio" rows="3" placeholder="Расскажите о себе" required><?php 
                     echo getFieldValue('bio'); 
                 ?></textarea>
                 <?php if (!empty($fieldErrors['bio'])): ?>
                 <div class="error"><?php echo htmlspecialchars($fieldErrors['bio']); ?></div>
                 <?php endif; ?>
             </div>
-            
+
             <div>
-                <input type="checkbox" class="form-check-input" name="check" id="check" required
+                <input type="checkbox" class="form-check-input" name="check" id="check" value="1"
                     <?php echo (!empty($plangValues)) ? 'checked' : ''; ?>>
                 <label class="form-check-label" for="check">С контрактом ознакомлен(а)</label>
                 <?php if (!empty($fieldErrors['check'])): ?>
